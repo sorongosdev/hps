@@ -113,6 +113,7 @@ def remove_dc_offset(fft_res):
     fft_res[2] = 0.0
     return fft_res
 
+## 주어진 기준 음과 음 인덱스를 사용하여 해당 음의 주파수를 계산
 def freq_for_note(base_note, note_index):
     # See Physics of Music - Notes
     #     https://pages.mtu.edu/~suits/NoteFreqCalcs.html
