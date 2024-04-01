@@ -12,6 +12,8 @@ import numpy as np
 import matplotlib.pyplot as plt
 import wave
 import math
+import librosa, librosa.display 
+
 
 ## Configuration
 
@@ -33,83 +35,81 @@ hop_length   = int(fft_len*(1-overlap))  # Number of samples between successive 
 # For the calculations of the music scale.
 TWELVE_ROOT_OF_2 = math.pow(2, 1.0 / 12)
 
-## wav 파일 읽은 후, sample_rate와 input_buffer 반환
-# (sample_rate : int, input_buffer : NDArray[Any]) 반환, NDArray[Any]는 실수값의 numpy 배열을 의미
-def read_wav_file(path, filename): 
+def read_wav_file(path, filename):
     # Reads the input WAV file from HDD disc.
-    wav_handler = wave.open(path + filename,'rb')    # 지정된 경로에 wav 파일을 읽기 전용 모드로 연다.
-    num_frames = wav_handler.getnframes()            # 파일에서 sample의 총 개수를 얻는다. 44100*(wav 길이 예로 4초) = 176400개
-    sample_rate = wav_handler.getframerate()         # 파일의 sample_rate를 얻는다. 44100
-    wav_frames = wav_handler.readframes(num_frames)  # 모든 frame을 읽는다. wav_frames는 num_frames의 두 배이다. 각 샘플이 2바이트로 표현되기 때문. wav_frames의 바이트 배열 길이는 176400*2 = 352800 바이트이다.
+    # 경로와 파일 이름으로 wav 파일을 읽음
+    wav_handler = wave.open(path + filename,'rb') # Read only.
+    # 프레임 레이트 확인
+    num_frames = wav_handler.getnframes()
+    # 샘플링 레이트 확인
+    sample_rate = wav_handler.getframerate()
+    # wav 파일의 프레임을 읽어옴
+    wav_frames = wav_handler.readframes(num_frames)
 
     # Loads the file into a NumPy contiguous array.
-    # WAV 파일의 프레임을 numpy 배열로 변환합니다.
+
     # Convert Int16 into float64 in the range of [-1, 1].
     # This means that the sound pressure values are mapped to integer values that can range from -2^15 to (2^15)-1.
     # We can convert our sound array to floating point values ranging from -1 to 1 as follows.
-    signal_temp = np.frombuffer(wav_frames, np.int16) # 읽은 wav_frame 데이터를 numpy 배열로 변환한다. 데이터 타입은 int16이다. 
-    signal_array = np.zeros(len(signal_temp), float) # wav_frames로부터 생성된 numpy 배열이다. 신호를 저장할 float 타입의 numpy 배열을 생성한다.
+    # int16을 float64로 반환
+    signal_temp = np.frombuffer(wav_frames, np.int16)
+    signal_array = np.zeros( len(signal_temp), float)
 
     for i in range(0, len(signal_temp)):
-        signal_array[i] = signal_temp[i] / (2.0**15) # int16 타입의 값을 [-1, 1] 범위의 float64 타입으로 변환합니다.
+        signal_array[i] = signal_temp[i] / (2.0**15)
 
+    # 변환된 신호 배열 출력
     print("file_name: " + str(filename))
     print("sample_rate: " + str(sample_rate))
-    print("input_buffer.size, 총 sample의 수: " + str(len(signal_array)))
+    print("input_buffer.size: " + str(len(signal_array)))
     print("seconds: " + to_str_f4(len(signal_array)/sample_rate) + " s")
     print("type [-1, 1]: " + str(signal_array.dtype))
     print("min: " + to_str_f4(np.min(signal_array)) + " max: " + to_str_f4(np.max(signal_array))  )
 
-    # sample_rate int형 숫자와 input_buffer numpy float 배열 반환
-    return sample_rate, signal_array 
+    # 샘플링율과 신호의 numpy 배열 반환
+    return sample_rate, signal_array
 
-## chunk 나눈 후, 나누어진 chunk의 리스트 반환
-# (나누어진 청크들의 리스트 : list[NDArray]) 반환
-# buffer의 총 sample 수 = wav 파일 seconds * fft_len
-def divide_buffer_into_non_overlapping_chunks(buffer, max_len): # max_len -> fft_len
-    buffer_len = len(buffer)                  # input_buffer의 길이 계산, buffer에 총 몇개의 sample이 있는지를 반환
-    chunks = int(buffer_len / max_len)        # input_buffer 길이를 fft_len으로 나누어 몇 개의 chunk로 나눌 수 있는지 계산
-    print("buffers_num: " + str(chunks))      # 총 chunks의 개수를 출력
-
-    division_pts_list = []                    # chunk를 나눌 지점을 저장할 리스트
+# 주어진 버퍼를 최대 길이로 나누어 겹치지 않는 청크(작은 조각)로 분할, 분할된 배열 뷰 반환
+def divide_buffer_into_non_overlapping_chunks(buffer, max_len): # max_len은 fft_length를 말함
+    # 버퍼의 최대 길이 확인
+    buffer_len = len(buffer)
+    # 최대길이로 나누어질 수 있는 청크의 수 계산
+    chunks = int(buffer_len / max_len)
+    print("buffers_num: " + str(chunks))
+    # 분할 지점을 나타내는 인덱스 리스트 생성
+    division_pts_list = []
     for i in range(1, chunks):
-        division_pts_list.append(i * max_len) # 각 청크의 시작 지점을 계산하여 리스트에 추가, fft_len의 배수가 리스트에 추가됨 -> [22050, 44100, 66150, ..]
-    splitted_array_view = np.split(buffer, division_pts_list, axis=0) # 계산된 지점을 기준으로 버퍼를 나눈다.
-    
-    print("나누어진 chunk들에 대한 리스트 :", splitted_array_view)
-    # 나누어진 청크들의 리스트를 반환, list[NDArray]
-    return splitted_array_view                
+        division_pts_list.append(i * max_len) 
+    # 버퍼를 분할 지점으로 나누어 배열 뷰를 생성
+    splitted_array_view = np.split(buffer, division_pts_list, axis=0)
+    # 분할된 뷰 반환
+    return splitted_array_view
 
-## fft 연산 후, frequency 배열과 magnitude 배열과 frequency 개수(대칭적인 rfft 이용) 반환
-# (frequency 배열 : NDArray[floating[Any]], magnitude 배열 : NDArray[Any], frequency 개수 : int) 반환
+## 주어진 데이터에 대한 FFT(Fast Fourier Transform)를 계산하여 FFT 주파수와 FFT 결과를 반환하는 함수
 def getFFT(data, rate):
     # Returns fft_freq and fft, fft_res_len.
-    len_data = len(data)                # 입력 데이터의 길이 계산
-    data = data * np.hamming(len_data)  # 입력 데이터에 hamming_window를 적용하여 스펙트럼의 누설을 감소
-
-    # fft 연산 후 magnitude 배열
-    fft = np.fft.rfft(data)             # 입력 데이터에 대해 실수 fft를 수행한다. fft의 결과로 복소수 numpy 배열을 반환한다.
-                                        # rfft는 수행하면 양수, 음수의 대칭적이므로 양수만을 출력한다.
-    fft = np.abs(fft)                   # fft 결과의 절대값을 취하여 magnitue를 얻는다. 실수값의 numpy 배열을 반환한다.
-
-    # fft 연산 후 frequency 개수 
-    ret_len_FFT = len(fft)              # fft 결과의 길이를 저장한다. 배열의 원소 개수, 즉 fft 변환을 통해 분석된 주파수 성분의 개수를 반환한다.
-    
-    # fft 연산 후 frequency 배열
-    freq = np.fft.rfftfreq(len_data, 1.0 / sample_rate) # fft 결과에 대응하는 주파수 배열을 계산한다.
+    # 데이터 길이 확인
+    len_data = len(data)
+    # 해밍 윈도우 함수 적용
+    data = data * np.hamming(len_data)
+    # fft 계산
+    fft = np.fft.rfft(data)
+    # fft 결과 절대값
+    fft = np.abs(fft)
+    # fft 결과 길이 확인
+    ret_len_FFT = len(fft)
+    # fft 주파수 계산. 주파수 범위 : 0 ~ 샘플링 주파수의 절반까지
+    freq = np.fft.rfftfreq(len_data, 1.0 / sample_rate)
     # return ( freq[:int(len(freq) / 2)], fft[:int(ret_len_FFT / 2)], ret_len_FFT )
-    
-    print("------------------------------")
-    print("getFFT() 거친 후 결과")
-    print("fft 연산 후 magnitude 배열 :", fft)
-    print("fft 연산 후 frequency 개수 :", ret_len_FFT)
-    print("fft 연산 후 frequency 배열 :", freq)
-    # (frequency 배열 : NDArray[floating[Any]], magnitude 배열 : NDArray[Any], frequency 개수 : int) 반환
-    return (freq, fft, ret_len_FFT) 
+    # fft 주파수 / fft 결과/ fft 길이 반환
+    return ( freq, fft, ret_len_FFT )
 
-## fft 결과에 DC offset을 제거한 magnitude를 반환
 def remove_dc_offset(fft_res):
     # Removes the DC offset from the FFT (First bin's)
+    # 첫번째, 두번째, 세번째 bin에 해당하는 값을 0으로 만들고 수정된 값 반환
+    # fft 결과는 주파수 성분의 크기를 나타내는 복소수 형태로 표현되는데, 첫번째 bin이 dc offset에 해당함
+    # 신호의 평균값을 제거하는 과정임.
+    # 평균값을 기준으로 좌우 대칭이 되는 효과
     fft_res[0] = 0.0
     fft_res[1] = 0.0
     fft_res[2] = 0.0
@@ -318,6 +318,7 @@ def main():
     # The buffer chunk at n seconds:
 
     count = 0
+    spectrogram_data = []
     
     ## Uncomment to process a single chunk os a limited number os sequential chunks. 
     # for chunk in buffer_chunks[5: 6]:
@@ -341,30 +342,38 @@ def main():
             note_name = find_nearest_note(ordered_note_freq, freq[0])
             print("=> freq: " + to_str_f(freq[0]) + " Hz  value: " + to_str_f(freq[1]) + " note_name: " + note_name )
 
-
-        ## Uncomment to print the arrays.
-        # print("\nfft_freq: ")
-        # print(fft_freq)
-        # print("\nfft_freq_len: " + str(len(fft_freq)))
-
-        # print("\nfft_res: ")
-        # print(fft_res)
-
-        # print("\nfft_res_len: ")
-        # print(fft_res_len)
-
-
-        ## Uncomment to show the graph of the result of the FFT with the
-        ## correct frequencies in the legend. 
         N = fft_res_len
-        fft_freq_interval = fft_freq[: N // 4]
-        fft_res_interval = fft_res[: N // 4]
-        fig, ax = plt.subplots()
-        ax.plot(fft_freq_interval, 2.0/N * np.abs(fft_res_interval))
-        # plt.show()
-        
+
+        magnitude = 2.0/N * np.abs(fft_res)
+        # 각 청크에 대한 magnitude를 리스트에 추가합니다.
+        # 이번에는 numpy array의 append가 아니라, 리스트의 append를 사용합니다.
+        max_index = np.where(fft_freq <= 1000)[0][-1] + 1
+
+        spectrogram_data.append(magnitude[:max_index])  # max_index까지의 magnitude만 추가합니다.
 
         count += 1
+
+    # numpy 배열로 변환합니다.
+    spectrogram_data = np.array(spectrogram_data)
+
+    # 시간 축을 위한 인덱스 배열을 생성합니다.
+    time_indices = np.arange(spectrogram_data.shape[0])
+
+    # 주파수 배열에서 1000 Hz 이하의 값에 해당하는 범위를 사용합니다.
+    max_index = np.where(fft_freq <= 1000)[0][-1] + 1
+    fft_freq_interval = fft_freq[:max_index]
+    ####################################################
+
+    # magnitude_matrix = np.tile(magnitude, (len(y_freqs), 1))
+
+    # 스펙트로그램을 그립니다.
+    plt.figure(figsize=(10, 6))
+    plt.pcolormesh(time_indices, fft_freq_interval, spectrogram_data[:, :max_index].T, shading='auto')
+    plt.colorbar(label='Magnitude')
+    plt.xlabel('Time Index')
+    plt.ylabel('Frequency (Hz)')
+    plt.title('Spectrogram Representation')
+    plt.show()
 
 if __name__ == "__main__":
     main()
