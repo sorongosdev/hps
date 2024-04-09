@@ -20,7 +20,7 @@ path     = "./"
 
 # filename = '18474__pitx__c4.wav'
 # filename = 'c_major_guitar.wav'
-filename = 'Am_AcusticPlug26_2.wav'
+filename = 'Dm_AcusticPlug26_1.wav'
 
 note_threshold = 5_000.0    # 120   # 50_000.0   #  3_000.0
 
@@ -76,7 +76,7 @@ def divide_buffer_into_non_overlapping_chunks(buffer, max_len): # max_len -> fft
         division_pts_list.append(i * max_len) # 각 청크의 시작 지점을 계산하여 리스트에 추가, fft_len의 배수가 리스트에 추가됨 -> [22050, 44100, 66150, ..]
     splitted_array_view = np.split(buffer, division_pts_list, axis=0) # 계산된 지점을 기준으로 버퍼를 나눈다.
     
-    print("나누어진 chunk들에 대한 리스트 :", splitted_array_view)
+    # print("나누어진 chunk들에 대한 리스트 :", splitted_array_view)
     # 나누어진 청크들의 리스트를 반환, list[NDArray]
     return splitted_array_view                
 
@@ -101,9 +101,9 @@ def getFFT(data, rate):
     
     print("------------------------------")
     print("getFFT() 거친 후 결과")
-    print("fft 연산 후 magnitude 배열 :", fft)
-    print("fft 연산 후 frequency 개수 :", ret_len_FFT)
-    print("fft 연산 후 frequency 배열 :", freq)
+    # print("fft 연산 후 magnitude 배열 :", fft)
+    # print("fft 연산 후 frequency 개수 :", ret_len_FFT)
+    # print("fft 연산 후 frequency 배열 :", freq)
     # (frequency 배열 : NDArray[floating[Any]], magnitude 배열 : NDArray[Any], frequency 개수 : int) 반환
     return (freq, fft, ret_len_FFT) 
 
@@ -197,22 +197,6 @@ def PitchSpectralHps(X, freq_buckets, f_s, buffer_rms):
     # freq_buckets: 주파수 버킷
     # f_s: 오디오 데이터의 샘플링 주파수
     # buffer_rms: RMS(Root Mean Square) 값을 기반으로 한 노트 임계값
-    """
-    NOTE: This function is from the book Audio Content Analysis repository
-    https://www.audiocontentanalysis.org/code/pitch-tracking/hps-2/
-    The license is MIT Open Source License.
-    And I have modified it. Go to the link to see the original.
-
-    computes the maximum of the Harmonic Product Spectrum
-
-    Args:
-        X: spectrogram (dimension FFTLength X Observations)
-        f_s: sample rate of audio data
-
-    Returns:
-        f HPS maximum location (in Hz)
-    """
-
     # initialize
 
     # hps 계산 순서
@@ -225,6 +209,8 @@ def PitchSpectralHps(X, freq_buckets, f_s, buffer_rms):
     iLen = int((X.shape[0] - 1) / iOrder)
     # hps 결과를 저장, 주어진 스펙트로그램 데이터에서 일부를 추출하여 초기화됨
     afHps = X[np.arange(0, iLen)]
+    print("iLen " + afHps)
+
     # 최소 주파수에 해당하는 인덱스를 계산하는데 사용
     # 주어진 샘플링 주파수 f_s와 스펙트로그램 데이터의 크기를 기반으로 계산
     k_min = int(round(f_min / f_s * 2 * (X.shape[0] - 1)))
